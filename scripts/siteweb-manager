@@ -1,0 +1,86 @@
+#!/bin/bash
+# source function library
+. /etc/rc.d/init.d/functions
+# chkconfig: 2345 55 25
+# description: Start Siteweb-Manager
+usage() {
+  echo " usage:$0 {start|stop|restart|status} "
+}
+
+start() {
+  PWD=$(pwd)
+  cd /siteweb/siteweb-manager/
+  nohup ./siteweb-manager server > logs.log 2>&1 &
+  cd $PWD
+  return 0
+}
+
+stop() {
+  echo "Siteweb Manager Service Stopped!"
+  PID=$(ps aux | grep -w 'siteweb-manager server' | grep -v grep | awk '{print $2}')
+    if [ "${PID}" ];then
+      kill -2 $PID
+      kill -9 $PID
+    fi
+}
+
+
+status() {
+    PID=$(ps aux | grep -w 'siteweb-manager server' | grep -v grep | awk '{print $2}')
+    if [ "$PID" ];then
+        if kill -0 $PID > /dev/null 2> /dev/null ; then
+            return 0
+        else
+            return 2 # 程序已死，但 pid 文件存在
+        fi
+    else
+        return 3 # 程序没有运行
+    fi
+}
+
+
+
+
+
+restart() {
+  stop
+  start
+}
+
+code=0
+
+#main function
+case $1 in
+  start)
+     status
+     code=$?
+     if [ $code -eq 0 ]; then
+         echo "服务正在运行"
+         code=0
+     else
+         echo "正在启动..."
+         start
+         code=$?
+     fi
+     ;;
+  stop)
+     echo "正在停止..."
+     stop
+     code=$?
+     ;;
+  restart)
+     restart
+     ;;
+  status)
+     status
+     if [ $? -eq 0 ]; then
+         echo "服务正在运行"
+     else
+         echo "服务未运行"
+     fi
+     ;;
+  *)
+     usage
+     ;;
+esac
+exit $code
