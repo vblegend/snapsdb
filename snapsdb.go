@@ -3,24 +3,26 @@ package snapsdb
 import (
 	"errors"
 	"fmt"
-	"go-admin/core/sdk/pkg"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"reflect"
+
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/vblegend/snapsdb/util"
 )
 
 type SnapsDB interface {
 	// 写入数据 至时间线 timestamp
-	Write(timestamp time.Time, data ...StoreData) error
+	Write(timeline time.Time, data ...StoreData) error
 	// 查询某个时间线数据，并返回至列表---
 	// list类型应为 继承自 protoreflect.ProtoMessage 的数组
-	Query(timestamp time.Time, out_list interface{}) error
+	Query(timeline time.Time, out_list interface{}) error
 	// 查询某个时间区间数据，返回数据至 outmap,
 	// StoreData 类型为 protobuf.proto 生成
 	/*
@@ -30,6 +32,9 @@ type SnapsDB interface {
 		var out_map [uint64][]StoreData
 	*/
 	QueryBetween(begin time.Time, end time.Time, out_map interface{}) error
+
+	/* 删除时间线所属当天的存储文件*/
+	DeleteFile(timeline time.Time) error
 }
 
 // 初始化一个数据库
@@ -49,7 +54,7 @@ func InitDB(opts ...Option) (SnapsDB, error) {
 	if err != nil {
 		return nil, err
 	}
-	err = pkg.MkDirIfNotExist(bpath)
+	err = util.MkDirIfNotExist(bpath)
 	if err != nil {
 		return nil, err
 	}
@@ -204,6 +209,17 @@ func (db *defaultDB) freeFile(timebaseline int64) {
 		db.opendFiles[timebaseline].Close()
 		delete(db.opendFiles, timebaseline)
 	}
+}
+
+func (db *defaultDB) DeleteFile(timeline time.Time) error {
+	timebaseline := time.Date(timeline.Year(), timeline.Month(), timeline.Day(), 0, 0, 0, 0, time.Local).Unix()
+	filepath := filepath.Join(db.basePath, fmt.Sprintf("%d.bin", timebaseline))
+	if util.FileExist(filepath) {
+		db.freeFile(timebaseline)
+		os.Remove(filepath)
+		return nil
+	}
+	return errors.New("file not found")
 }
 
 func (db *defaultDB) monitorRetention() {
