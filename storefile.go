@@ -35,7 +35,7 @@ type StoreFile interface {
 	// 写入数据
 	Write(timestamp time.Time, data ...StoreData) error
 	// 查询某个时间线数据，并返回至列表
-	Query(timestamp time.Time, slice_pointer *reflect.Value, origin_slice *reflect.Value, element_type *reflect.Type) error
+	QueryTimeline(timestamp time.Time, slice_pointer *reflect.Value, origin_slice *reflect.Value, element_type *reflect.Type) error
 	// 查询某个时间区间数据
 	QueryBetween(begin time.Time, end time.Time, map_object reflect.Value, key_type *reflect.Kind, slice_type *reflect.Type, element_type *reflect.Type) error
 	// 关闭文件
@@ -79,11 +79,14 @@ func (sf *storeFile) QueryBetween(begin time.Time, end time.Time, map_object ref
 	if !hitFile {
 		return errors.New("查询时间与文件不一致")
 	}
-	beginTimeline := time.Date(begin.Year(), begin.Month(), begin.Day(), begin.Hour(), begin.Minute(), begin.Second(), 0, time.Local).Unix()
+
+	year, month, day := begin.Date()
+	beginTimeline := time.Date(year, month, day, begin.Hour(), begin.Minute(), begin.Second(), 0, time.Local).Unix()
 	if sf.TimelineBegin > beginTimeline {
 		beginTimeline = sf.TimelineBegin
 	}
-	endTimeline := time.Date(end.Year(), end.Month(), end.Day(), end.Hour(), end.Minute(), end.Second(), 0, time.Local).Unix()
+	year, month, day = end.Date()
+	endTimeline := time.Date(year, month, day, end.Hour(), end.Minute(), end.Second(), 0, time.Local).Unix()
 	if sf.TimelineEnd < endTimeline {
 		endTimeline = sf.TimelineEnd
 	}
@@ -128,11 +131,13 @@ func (sf *storeFile) GetReflectKey(timeline time.Time, key_type reflect.Kind) *r
 }
 
 // 查询某个时间线上的所有数据
-func (sf *storeFile) Query(timestamp time.Time, slice_pointer *reflect.Value, origin_slice *reflect.Value, element_type *reflect.Type) error {
+func (sf *storeFile) QueryTimeline(timestamp time.Time, slice_pointer *reflect.Value, origin_slice *reflect.Value, element_type *reflect.Type) error {
 	sf.Lock()
 	defer sf.Unlock()
 	// 获取时间戳的所属时间线
-	timeline := time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), timestamp.Hour(), timestamp.Minute(), timestamp.Second(), 0, time.Local).Unix()
+	year, month, day := timestamp.Date()
+	timeline := time.Date(year, month, day, timestamp.Hour(), timestamp.Minute(), timestamp.Second(), 0, time.Local).Unix()
+	// timeline := time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), timestamp.Hour(), timestamp.Minute(), timestamp.Second(), 0, time.Local).Unix()
 	return sf.queryByTimeline(timeline, slice_pointer, origin_slice, element_type)
 }
 
@@ -182,7 +187,8 @@ func (sf *storeFile) Write(timestamp time.Time, data ...StoreData) error {
 	sf.Lock()
 	defer sf.Unlock()
 	// 获取时间戳的所属时间线
-	timeline := time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), timestamp.Hour(), timestamp.Minute(), timestamp.Second(), 0, time.Local).Unix()
+	year, month, day := timestamp.Date()
+	timeline := time.Date(year, month, day, timestamp.Hour(), timestamp.Minute(), timestamp.Second(), 0, time.Local).Unix()
 	// read metainfo
 	meta, err := sf.ReadMateInfo(timeline)
 	if err != nil {

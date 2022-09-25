@@ -22,7 +22,7 @@ type SnapsDB interface {
 	Write(timeline time.Time, data ...StoreData) error
 	// 查询某个时间线数据，并返回至列表---
 	// list类型应为 继承自 protoreflect.ProtoMessage 的数组
-	Query(timeline time.Time, out_list interface{}) error
+	QueryTimeline(timeline time.Time, out_list interface{}) error
 	// 查询某个时间区间数据，返回数据至 outmap,
 	// StoreData 类型为 protobuf.proto 生成
 	/*
@@ -76,10 +76,10 @@ type defaultDB struct {
 
 // parse map interface typed
 // returm [map_pointer,map_type,map_keytype,slice_type,element_type,error]
-func (db *defaultDB) parseMapInterface(str_key_map interface{}) (*reflect.Value, *reflect.Type, *reflect.Kind, *reflect.Type, *reflect.Type, error) {
+func (db *defaultDB) parseMapInterface(key_map interface{}) (*reflect.Value, *reflect.Type, *reflect.Kind, *reflect.Type, *reflect.Type, error) {
 	// 获取slice的类型
 	// read metainfo
-	origin_map := reflect.ValueOf(str_key_map)
+	origin_map := reflect.ValueOf(key_map)
 	if origin_map.Kind() != reflect.Ptr {
 		return nil, nil, nil, nil, nil, errors.New("Invalid argument 'list interface{}'")
 	}
@@ -89,7 +89,7 @@ func (db *defaultDB) parseMapInterface(str_key_map interface{}) (*reflect.Value,
 	}
 	origin_map = map_pointer
 	// get list typed
-	type_interface := reflect.TypeOf(str_key_map)
+	type_interface := reflect.TypeOf(key_map)
 	// get list typed pointer typed
 	type_map := type_interface.Elem()
 	// get element typed
@@ -129,16 +129,17 @@ func (db *defaultDB) parseSliceInterface(list interface{}, clearList bool) (*ref
 	return &slice_pointer, &origin_slice, &element_type, nil
 }
 
-func (db *defaultDB) Query(timestamp time.Time, out_list interface{}) error {
+func (db *defaultDB) QueryTimeline(timeline time.Time, out_list interface{}) error {
 	// 获取时间戳的时间基线，当天的0点时间戳，文件名
-	timebaseline := time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), 0, 0, 0, 0, time.Local).Unix()
+	year, month, day := timeline.Date()
+	timebaseline := time.Date(year, month, day, 0, 0, 0, 0, time.Local).Unix()
 	storeFile, err := db.loadFile(timebaseline, false)
 	if err == nil {
 		slice_pointer, origin_slice, element_type, err := db.parseSliceInterface(out_list, false)
 		if err != nil {
 			return err
 		}
-		return storeFile.Query(timestamp, slice_pointer, origin_slice, element_type)
+		return storeFile.QueryTimeline(timeline, slice_pointer, origin_slice, element_type)
 	}
 	return nil
 }
@@ -155,7 +156,8 @@ func (db *defaultDB) QueryBetween(begin time.Time, end time.Time, out_map interf
 	//
 	map_object := reflect.MakeMap(*map_type)
 	// 取 begin 当天
-	timebasetime := time.Date(begin.Year(), begin.Month(), begin.Day(), 0, 0, 0, 0, time.Local)
+	year, month, day := begin.Date()
+	timebasetime := time.Date(year, month, day, 0, 0, 0, 0, time.Local)
 	for {
 		// 如果 时间基线大于 end 则退出
 		if timebasetime.Sub(end) > 0 {
@@ -176,14 +178,15 @@ func (db *defaultDB) QueryBetween(begin time.Time, end time.Time, out_map interf
 	return nil
 }
 
-func (db *defaultDB) Write(timestamp time.Time, data ...StoreData) error {
+func (db *defaultDB) Write(timeline time.Time, data ...StoreData) error {
 	// 获取时间戳的时间基线，当天的0点时间戳，文件名
-	timebaseline := time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), 0, 0, 0, 0, time.Local).Unix()
+	year, month, day := timeline.Date()
+	timebaseline := time.Date(year, month, day, 0, 0, 0, 0, time.Local).Unix()
 	storeFile, err := db.loadFile(timebaseline, true)
 	if err != nil {
 		return err
 	}
-	return storeFile.Write(timestamp, data...)
+	return storeFile.Write(timeline, data...)
 }
 
 func (db *defaultDB) loadFile(timebaseline int64, autoCreated bool) (StoreFile, error) {
@@ -212,7 +215,8 @@ func (db *defaultDB) freeFile(timebaseline int64) {
 }
 
 func (db *defaultDB) DeleteFile(timeline time.Time) error {
-	timebaseline := time.Date(timeline.Year(), timeline.Month(), timeline.Day(), 0, 0, 0, 0, time.Local).Unix()
+	year, month, day := timeline.Date()
+	timebaseline := time.Date(year, month, day, 0, 0, 0, 0, time.Local).Unix()
 	filepath := filepath.Join(db.basePath, fmt.Sprintf("%d.bin", timebaseline))
 	if util.FileExist(filepath) {
 		db.freeFile(timebaseline)

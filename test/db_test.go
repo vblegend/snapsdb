@@ -81,7 +81,7 @@ func TestSnapshotDBQuery(t *testing.T) {
 	// var list []types.ProcessInfo
 	list = append(list, types.ProcessInfo{Pid: 5, Name: "docker-compose - 1111", Cpu: 50.05, Mem: 95.67, Virt: 50000000000, Res: 550000000000000})
 	start := time.Now()
-	db.Query(timestamp, &list)
+	db.QueryTimeline(timestamp, &list)
 	cost := time.Since(start)
 	fmt.Printf("查询完毕，用时%v\n", cost)
 	t.Log(list)
@@ -98,6 +98,24 @@ func TestSnapshotDBQueryBetween(t *testing.T) {
 	cost := time.Since(start)
 	fmt.Printf("查询完毕，用时%v\n", cost)
 	t.Log(list)
+}
+
+func TestTimeline(t *testing.T) {
+	cs := time.Hour * 24
+	fmt.Printf("%f\n", cs.Seconds())
+	tn := time.Now()
+
+	year, month, day := tn.Date()
+
+	fmt.Printf("%d-%d-%d", year, month, day)
+
+	unix := tn.Unix()
+	newUnix := unix / 86400 * 86400
+	fmt.Println(newUnix)
+	at := time.Date(0, 0, 0, 0, 0, int(newUnix), 0, time.Local)
+
+	fmt.Printf("%s\n%s", tn.Format("2006-01-02 15:04:05"), at.Format("2006-01-02 15:04:05"))
+
 }
 
 func TestXXXASDASD(t *testing.T) {
