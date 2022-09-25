@@ -4,13 +4,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"go-admin/core/sdk/pkg"
+
 	"io"
 	"os"
 	"reflect"
 	"sync"
 	"time"
 
+	"github.com/vblegend/snapsdb/util"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
@@ -56,7 +57,7 @@ type storeFile struct {
 func LoadStoreFile(filename string, timebaseline int64, autoCreated bool) (StoreFile, error) {
 	filev := storeFile{TimelineBegin: timebaseline, TimelineEnd: timebaseline + TimelineLengthOfDay}
 	var err error
-	if !pkg.FileExist(filename) {
+	if !util.FileExist(filename) {
 		if autoCreated {
 			err = filev.init(filename)
 		} else {

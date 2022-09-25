@@ -1,72 +1,24 @@
 package test
 
 import (
-	//"go-admin/models/tools"
-	//"os"
-
 	"bufio"
 	"fmt"
-	"go-admin/core/sdk/collectors"
-	"go-admin/core/sdk/pkg"
-	"go-admin/core/sdk/types"
-	"go-admin/core/storage/snapsdb"
 	"io"
 	"path/filepath"
 	"reflect"
+
 	"testing"
 	"time"
 
+	"github.com/vblegend/snapsdb"
+	"github.com/vblegend/snapsdb/test/types"
+	"github.com/vblegend/snapsdb/util"
+
 	"google.golang.org/protobuf/proto"
-	//"text/template"
 )
 
-func TestGoModelTemplate(t *testing.T) {
-	// 进程监控
-	monitor := collectors.NewProcessCollector()
-	monitor.Start()
-	time.Sleep(time.Second)
-	processes := monitor.GetProcess()
-	t.Log(processes)
-	//t1, err := template.ParseFiles("model.go.template")
-	//if err != nil {
-	//	t.Error(err)
-	//}
-	//table := tools.SysTables{}
-	//table.TBName = "sys_tables"
-	//tab, err := table.Get()
-	//if err != nil {
-	//	t.Error(err)
-	//}
-	//file, err := os.Create("models/" + table.PackageName + ".go")
-	//if err != nil {
-	//	t.Error(err)
-	//}
-	//defer file.Close()
-	//
-	//_ = t1.Execute(file, tab)
-	t.Log("bbq")
-}
-
-func TestGoApiTemplate(t *testing.T) {
-	//t1, err := template.ParseFiles("api.go.template")
-	//if err != nil {
-	//	t.Error(err)
-	//}
-	//table := tools.SysTables{}
-	//table.TBName = "sys_tables"
-	//tab, _ := table.Get()
-	//file, err := os.Create("apis/" + table.PackageName + ".go")
-	//if err != nil {
-	//	t.Error(err)
-	//}
-	//defer file.Close()
-	//
-	//_ = t1.Execute(file, tab)
-	t.Log("")
-}
-
 func InitDB() snapsdb.SnapsDB {
-	snapPath := filepath.Join(pkg.AssemblyDir(), "../snapdata/proc")
+	snapPath := filepath.Join(util.AssemblyDir(), "../snapdata/proc")
 	db, err := snapsdb.InitDB(snapsdb.WithDataPath(snapPath), snapsdb.WithDataRetention(time.Hour*24*14))
 	if err != nil {
 		panic(err)
@@ -75,7 +27,7 @@ func InitDB() snapsdb.SnapsDB {
 }
 
 // 测试 snapshotDB 批量插入
-func TestSnapshotDBWrite(t *testing.T) {
+func TestSnapshotDBWrite(_ *testing.T) {
 	fmt.Println("开始测试")
 	db := InitDB()
 	v1 := &types.ProcessInfo{Pid: 1, Name: "docker-compose - 1", Cpu: 10.01, Mem: 91.23, Virt: 10000000000, Res: 110000000000000}
@@ -97,11 +49,11 @@ func TestSnapshotDBWrite(t *testing.T) {
 	total := count * len(array)
 	bySec := float64(total) / cost.Seconds()
 	fmt.Printf("写入完毕...\n共计写入%s条数据\n每条数据长度%s字节\n单位数据量%s条\n共用时%s\n每秒写入量%s条\n",
-		pkg.Green(fmt.Sprintf("%d", total)),
-		pkg.Green(fmt.Sprintf("%d", len(data1))),
-		pkg.Green(fmt.Sprintf("%d", len(array))),
-		pkg.Green(fmt.Sprintf("%v", cost)),
-		pkg.Green(fmt.Sprintf("%.0f", bySec)))
+		util.Green(fmt.Sprintf("%d", total)),
+		util.Green(fmt.Sprintf("%d", len(data1))),
+		util.Green(fmt.Sprintf("%d", len(array))),
+		util.Green(fmt.Sprintf("%v", cost)),
+		util.Green(fmt.Sprintf("%.0f", bySec)))
 }
 
 // 测试 snapshotDB 单条插入
