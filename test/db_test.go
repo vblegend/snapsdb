@@ -70,7 +70,7 @@ func TestSnapshotDBWriteOnce(t *testing.T) {
 	start := time.Now() // 获取当前时间
 	db.Write(timestamp, v1, v2, v3, v4, v5)
 	cost := time.Since(start)
-	fmt.Printf("写入完毕，共计%d条数据，用时%v\n", 20, cost)
+	fmt.Printf("写入完毕，共计%d条数据，用时%v\n", 5, cost)
 }
 
 // 测试 snapshotDB 的时间线查询
@@ -101,21 +101,10 @@ func TestSnapshotDBQueryBetween(t *testing.T) {
 }
 
 func TestTimeline(t *testing.T) {
-	cs := time.Hour * 24
-	fmt.Printf("%f\n", cs.Seconds())
 	tn := time.Now()
-
 	year, month, day := tn.Date()
-
-	fmt.Printf("%d-%d-%d", year, month, day)
-
-	unix := tn.Unix()
-	newUnix := unix / 86400 * 86400
-	fmt.Println(newUnix)
-	at := time.Date(0, 0, 0, 0, 0, int(newUnix), 0, time.Local)
-
-	fmt.Printf("%s\n%s", tn.Format("2006-01-02 15:04:05"), at.Format("2006-01-02 15:04:05"))
-
+	timeline := time.Date(year, month, day, tn.Hour(), tn.Minute(), tn.Second(), 0, time.Local).Unix()
+	fmt.Printf("%d-%d", timeline, tn.Unix())
 }
 
 func TestXXXASDASD(t *testing.T) {

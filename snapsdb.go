@@ -17,26 +17,6 @@ import (
 	"github.com/vblegend/snapsdb/util"
 )
 
-type SnapsDB interface {
-	// 写入数据 至时间线 timestamp
-	Write(timeline time.Time, data ...StoreData) error
-	// 查询某个时间线数据，并返回至列表---
-	// list类型应为 继承自 protoreflect.ProtoMessage 的数组
-	QueryTimeline(timeline time.Time, out_list interface{}) error
-	// 查询某个时间区间数据，返回数据至 outmap,
-	// StoreData 类型为 protobuf.proto 生成
-	/*
-		var out_map [string][]StoreData
-		var out_map [uint32][]StoreData
-		var out_map [int64][]StoreData
-		var out_map [uint64][]StoreData
-	*/
-	QueryBetween(begin time.Time, end time.Time, out_map interface{}) error
-
-	/* 删除时间线所属当天的存储文件*/
-	DeleteFile(timeline time.Time) error
-}
-
 // 初始化一个数据库
 /*
 	snapPath := filepath.Join(pkg.AssemblyDir(), "snapsdata/proc")
@@ -45,7 +25,7 @@ type SnapsDB interface {
 func InitDB(opts ...Option) (SnapsDB, error) {
 	options := &dbOptions{
 		dataPath:  "./snapdb",
-		retention: time.Hour * 24 * 7,
+		retention: TimestampOf7Day,
 	}
 	for _, opt := range opts {
 		opt(options)
@@ -131,8 +111,7 @@ func (db *defaultDB) parseSliceInterface(list interface{}, clearList bool) (*ref
 
 func (db *defaultDB) QueryTimeline(timeline time.Time, out_list interface{}) error {
 	// 获取时间戳的时间基线，当天的0点时间戳，文件名
-	year, month, day := timeline.Date()
-	timebaseline := time.Date(year, month, day, 0, 0, 0, 0, time.Local).Unix()
+	timebaseline := util.GetUnixOfDay(timeline)
 	storeFile, err := db.loadFile(timebaseline, false)
 	if err == nil {
 		slice_pointer, origin_slice, element_type, err := db.parseSliceInterface(out_list, false)
@@ -156,15 +135,14 @@ func (db *defaultDB) QueryBetween(begin time.Time, end time.Time, out_map interf
 	//
 	map_object := reflect.MakeMap(*map_type)
 	// 取 begin 当天
-	year, month, day := begin.Date()
-	timebasetime := time.Date(year, month, day, 0, 0, 0, 0, time.Local)
+	timebasetime := util.GetTimeOfDay(begin)
 	for {
 		// 如果 时间基线大于 end 则退出
 		if timebasetime.Sub(end) > 0 {
 			break
 		}
 		timebaseline := timebasetime.Unix()
-		fmt.Printf("命中文件%d\n", timebaseline)
+		// fmt.Printf("命中文件%d\n", timebaseline)
 		storeFile, err := db.loadFile(timebaseline, false)
 		if err == nil {
 			err = storeFile.QueryBetween(begin, end, map_object, key_type, slice_type, element_type)
@@ -172,7 +150,7 @@ func (db *defaultDB) QueryBetween(begin time.Time, end time.Time, out_map interf
 				return err
 			}
 		}
-		timebasetime = timebasetime.Add(time.Hour * 24)
+		timebasetime = timebasetime.Add(TimestampOf1Day)
 	}
 	map_pointer.Set(map_object)
 	return nil
@@ -180,8 +158,7 @@ func (db *defaultDB) QueryBetween(begin time.Time, end time.Time, out_map interf
 
 func (db *defaultDB) Write(timeline time.Time, data ...StoreData) error {
 	// 获取时间戳的时间基线，当天的0点时间戳，文件名
-	year, month, day := timeline.Date()
-	timebaseline := time.Date(year, month, day, 0, 0, 0, 0, time.Local).Unix()
+	timebaseline := util.GetUnixOfDay(timeline)
 	storeFile, err := db.loadFile(timebaseline, true)
 	if err != nil {
 		return err
@@ -195,7 +172,7 @@ func (db *defaultDB) loadFile(timebaseline int64, autoCreated bool) (StoreFile, 
 	file := db.opendFiles[timebaseline]
 	if file == nil {
 		filepath := filepath.Join(db.basePath, fmt.Sprintf("%d.bin", timebaseline))
-		stroe, err := LoadStoreFile(filepath, timebaseline, autoCreated)
+		stroe, err := loadStoreFile(filepath, timebaseline, autoCreated)
 		if err != nil {
 			return nil, err
 		}
@@ -214,9 +191,8 @@ func (db *defaultDB) freeFile(timebaseline int64) {
 	}
 }
 
-func (db *defaultDB) DeleteFile(timeline time.Time) error {
-	year, month, day := timeline.Date()
-	timebaseline := time.Date(year, month, day, 0, 0, 0, 0, time.Local).Unix()
+func (db *defaultDB) DeleteStorageFile(timeline time.Time) error {
+	timebaseline := util.GetUnixOfDay(timeline)
 	filepath := filepath.Join(db.basePath, fmt.Sprintf("%d.bin", timebaseline))
 	if util.FileExist(filepath) {
 		db.freeFile(timebaseline)
@@ -237,7 +213,7 @@ func (db *defaultDB) monitorRetention() {
 		case <-ticker.C:
 			now := time.Now()
 			filepath.Walk(db.basePath, func(path string, info os.FileInfo, err error) error {
-				if info.IsDir() || !strings.HasSuffix(path, ".bin") {
+				if err != nil || info.IsDir() || !strings.HasSuffix(path, ".bin") {
 					return nil
 				}
 				filetimestamp, _, ok := strings.Cut(info.Name(), ".")

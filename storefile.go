@@ -16,45 +16,41 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-const (
-	// 一天的时间线长度
-	TimelineLengthOfDay = int64(86400)
-	// 文件头的偏移量
-	FileHeaderOffset = int64(16)
-	// 单条时间线元数据的大小
-	MateInfoSize = int64(8)
-	// 一天的时间线元数据总大小
-	MateTableSize = int64(691200)
-	// 下一条数据记录的指针偏移位置（相对于数据记录的开始位置）
-	NextDataOffset = int64(8)
-	// 文件第一条数据的偏移位置
-	FileDataOffset = uint32(MateTableSize + FileHeaderOffset)
-)
-
-type StoreFile interface {
-	// 写入数据
-	Write(timestamp time.Time, data ...StoreData) error
-	// 查询某个时间线数据，并返回至列表
-	QueryTimeline(timestamp time.Time, slice_pointer *reflect.Value, origin_slice *reflect.Value, element_type *reflect.Type) error
-	// 查询某个时间区间数据
-	QueryBetween(begin time.Time, end time.Time, map_object reflect.Value, key_type *reflect.Kind, slice_type *reflect.Type, element_type *reflect.Type) error
-	// 关闭文件
-	Close()
-	// 读取文件时间线元信息
-	ReadMateInfo(timeline int64) (*TimelineMateInfo, error)
-}
+// file format
+// =============================
+// 1.file header
+// offset 0 byte
+// size 16 byte
+//
+// magic code  offset +0
+// timestamp   offset +8
+// =============================
+// 2.index table
+// offset 16 byte
+// size 691200 bytes (86400 * 8)
+//
+// First Record Address  offset (16 + index * 8) byte
+// Last  Record Address  offset (16 + index * 8 + 4) byte
+// =============================
+// 3.data block
+// offset (691200 + 16) byte
+//
+// Timestamp			 size 8 byte     offset RecordAddress + 0
+// Next Record Address   size 4 byte     offset RecordAddress + 8
+// data length  		 size 4 byte     offset RecordAddress + 12
+// binary data   		 size ... byte   offset RecordAddress + 16
 
 type storeFile struct {
-	TimelineBegin int64      // 存储文件的时间基线
-	TimelineEnd   int64      // 存储文件的时间基线
-	file          *os.File   //文件访问对象
-	mutex         sync.Mutex // 文件操作互斥锁
+	TimelineBegin int64      // storage file time base line of begin
+	TimelineEnd   int64      // storage file time base line of end
+	file          *os.File   // storage file access object
+	mutex         sync.Mutex // access lock
 }
 
-// 加载时间片存储文件
-// 写 autoCreated 为 true  时 文件不存在自动创建初始化文件
-// 读 autoCreated 为 fakse 时 文件不存在返回error
-func LoadStoreFile(filename string, timebaseline int64, autoCreated bool) (StoreFile, error) {
+// load file object from timebaseline
+// autoCreated = true  automatically created and initialized when file does not exist
+// autoCreated = fakse return error if file does not exist
+func loadStoreFile(filename string, timebaseline int64, autoCreated bool) (StoreFile, error) {
 	filev := storeFile{TimelineBegin: timebaseline, TimelineEnd: timebaseline + TimelineLengthOfDay}
 	var err error
 	if !util.FileExist(filename) {
@@ -79,14 +75,11 @@ func (sf *storeFile) QueryBetween(begin time.Time, end time.Time, map_object ref
 	if !hitFile {
 		return errors.New("查询时间与文件不一致")
 	}
-
-	year, month, day := begin.Date()
-	beginTimeline := time.Date(year, month, day, begin.Hour(), begin.Minute(), begin.Second(), 0, time.Local).Unix()
+	beginTimeline := begin.Unix()
 	if sf.TimelineBegin > beginTimeline {
 		beginTimeline = sf.TimelineBegin
 	}
-	year, month, day = end.Date()
-	endTimeline := time.Date(year, month, day, end.Hour(), end.Minute(), end.Second(), 0, time.Local).Unix()
+	endTimeline := end.Unix()
 	if sf.TimelineEnd < endTimeline {
 		endTimeline = sf.TimelineEnd
 	}
@@ -135,8 +128,7 @@ func (sf *storeFile) QueryTimeline(timestamp time.Time, slice_pointer *reflect.V
 	sf.Lock()
 	defer sf.Unlock()
 	// 获取时间戳的所属时间线
-	year, month, day := timestamp.Date()
-	timeline := time.Date(year, month, day, timestamp.Hour(), timestamp.Minute(), timestamp.Second(), 0, time.Local).Unix()
+	timeline := timestamp.Unix()
 	// timeline := time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), timestamp.Hour(), timestamp.Minute(), timestamp.Second(), 0, time.Local).Unix()
 	return sf.queryByTimeline(timeline, slice_pointer, origin_slice, element_type)
 }
@@ -187,8 +179,7 @@ func (sf *storeFile) Write(timestamp time.Time, data ...StoreData) error {
 	sf.Lock()
 	defer sf.Unlock()
 	// 获取时间戳的所属时间线
-	year, month, day := timestamp.Date()
-	timeline := time.Date(year, month, day, timestamp.Hour(), timestamp.Minute(), timestamp.Second(), 0, time.Local).Unix()
+	timeline := timestamp.Unix()
 	// read metainfo
 	meta, err := sf.ReadMateInfo(timeline)
 	if err != nil {
@@ -274,12 +265,11 @@ func (sf *storeFile) init(filepath string) error {
 	if err != nil {
 		return err
 	}
-	// file.ReadAt(00, 00)
-	binary.Write(file, binary.LittleEndian, uint64(7089841687217925715)) // file flags
-	binary.Write(file, binary.LittleEndian, sf.TimelineBegin)            // timebaseline
-	for i := int64(0); i < TimelineLengthOfDay; i++ {
-		binary.Write(file, binary.LittleEndian, uint32(0)) // TLFirst
-		binary.Write(file, binary.LittleEndian, uint32(0)) // TLLast
+	binary.Write(file, binary.LittleEndian, uint64(7089841687217925715)) // file flags    offset + 0
+	binary.Write(file, binary.LittleEndian, sf.TimelineBegin)            // timebaseline  offset + 8
+	for i := int64(0); i < TimelineLengthOfDay; i++ {                    //  			  offset + (16 + timeline * UnitSize) UnitSize = 8
+		binary.Write(file, binary.LittleEndian, uint32(0)) // TLFirst	  				  offset + 0
+		binary.Write(file, binary.LittleEndian, uint32(0)) // TLLast	  				  offset + 4
 	}
 	sf.file = file
 	return err
