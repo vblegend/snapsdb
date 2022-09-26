@@ -61,6 +61,9 @@ func (db *defaultDB) QueryTimeline(timeline time.Time, out_list interface{}) err
 	// 获取时间戳的时间基线，当天的0点时间戳，文件名
 	timebaseline := util.GetUnixOfDay(timeline)
 	storeFile, err := db.loadFile(timebaseline, false)
+	if err != nil && err != ErrorDBFileNotHit {
+		return err
+	}
 	if err == nil {
 		slice_pointer, origin_slice, element_type, err := util.ParseSlicePointer(out_list, false)
 		if err != nil {
@@ -90,9 +93,10 @@ func (db *defaultDB) QueryBetween(begin time.Time, end time.Time, out_map interf
 			break
 		}
 		timebaseline := timebasetime.Unix()
-		// fmt.Printf("命中文件%d\n", timebaseline)
 		storeFile, err := db.loadFile(timebaseline, false)
-		if err == nil {
+		if err != nil && err != ErrorDBFileNotHit {
+			return err
+		} else if err == nil {
 			err = storeFile.QueryBetween(begin, end, map_object, key_type, slice_type, element_type)
 			if err != nil {
 				return err

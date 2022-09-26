@@ -3,7 +3,6 @@ package snapsdb
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 
 	"io"
 	"os"
@@ -58,7 +57,7 @@ func loadStoreFile(filename string, timebaseline int64, timeKeyFormat string, au
 		if autoCreated {
 			err = filev.init(filename)
 		} else {
-			return nil, fmt.Errorf("file “%s” not found", filename)
+			return nil, ErrorDBFileNotHit
 		}
 	} else {
 		err = filev.open(filename)

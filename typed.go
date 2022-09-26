@@ -1,6 +1,7 @@
 package snapsdb
 
 import (
+	"errors"
 	"reflect"
 	"time"
 
@@ -20,6 +21,8 @@ type dbOptions struct {
 }
 
 type StoreData protoreflect.ProtoMessage
+
+var ErrorDBFileNotHit = errors.New("one or more files were not hit(not found datastore file).")
 
 /* time */
 const (
@@ -65,8 +68,9 @@ type SnapsDB interface {
 		db.QueryTimeline(timestamp, &list)
 	*/
 	QueryTimeline(timeline time.Time, lp_out_slice interface{}) error
-	// 查询某个时间区间数据，返回数据至 lp_out_map,
-	// 类型为 protobuf.proto 生成
+	// query the data of a certain time interval and return the data to lp_out_map,
+	// typed protobuf.proto
+	// ErrorDBFileNotHit
 	/*
 		var out_map [string][]StoreData // keys is timeline.Format(timekeyformat)
 		var out_map [uint32][]StoreData // keys is timeline.Unix()
