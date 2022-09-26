@@ -19,7 +19,7 @@ import (
 
 func InitDB() snapsdb.SnapsDB {
 	snapPath := filepath.Join(util.AssemblyDir(), "../snapdata/proc")
-	db, err := snapsdb.InitDB(snapsdb.WithDataPath(snapPath), snapsdb.WithDataRetention(time.Hour*24*14))
+	db, err := snapsdb.InitDB(snapsdb.WithDataPath(snapPath), snapsdb.WithDataRetention(snapsdb.TimestampOf100Year))
 	if err != nil {
 		panic(err)
 	}
@@ -65,7 +65,7 @@ func TestSnapshotDBWriteOnce(t *testing.T) {
 	v3 := &types.ProcessInfo{Pid: 3, Name: "docker-compose - 3", Cpu: 30.03, Mem: 93.45, Virt: 30000000000, Res: 330000000000000}
 	v4 := &types.ProcessInfo{Pid: 4, Name: "docker-compose - 4", Cpu: 40.04, Mem: 94.56, Virt: 40000000000, Res: 440000000000000}
 	v5 := &types.ProcessInfo{Pid: 5, Name: "docker-compose - 5", Cpu: 50.05, Mem: 95.67, Virt: 50000000000, Res: 550000000000000}
-	timestamp := time.Now()
+	timestamp := time.Date(2020, 01, 01, 01, 01, 01, 01, time.Local)
 	fmt.Println(timestamp.Format("2006-01-02 15:04:05"))
 	start := time.Now() // 获取当前时间
 	db.Write(timestamp, v1, v2, v3, v4, v5)

@@ -4,14 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"reflect"
 
-	"strconv"
-	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/vblegend/snapsdb/util"
@@ -24,8 +20,9 @@ import (
 */
 func InitDB(opts ...Option) (SnapsDB, error) {
 	options := &dbOptions{
-		dataPath:  "./snapdb",
-		retention: TimestampOf7Day,
+		dataPath:      "./data",
+		retention:     TimestampOf7Day,
+		timekeyformat: "2006-01-02 15:04:05",
 	}
 	for _, opt := range opts {
 		opt(options)
@@ -39,74 +36,25 @@ func InitDB(opts ...Option) (SnapsDB, error) {
 		return nil, err
 	}
 	db := defaultDB{
-		basePath:   bpath,
-		retention:  options.retention,
-		opendFiles: make(map[int64]StoreFile),
+		basePath:      bpath,
+		retention:     options.retention,
+		opendFiles:    make(map[int64]StoreFile),
+		timeKeyFormat: options.timekeyformat,
 	}
-	go db.monitorRetention()
-	return &db, nil
+	return registerDB(&db)
 }
 
 type defaultDB struct {
-	basePath   string
-	opendFiles map[int64]StoreFile
-	retention  time.Duration
-	mutex      sync.Mutex
+	basePath      string
+	opendFiles    map[int64]StoreFile
+	retention     time.Duration
+	mutex         sync.Mutex
+	timeKeyFormat string
+	isDisposed    bool
 }
 
-// parse map interface typed
-// returm [map_pointer,map_type,map_keytype,slice_type,element_type,error]
-func (db *defaultDB) parseMapInterface(key_map interface{}) (*reflect.Value, *reflect.Type, *reflect.Kind, *reflect.Type, *reflect.Type, error) {
-	// 获取slice的类型
-	// read metainfo
-	origin_map := reflect.ValueOf(key_map)
-	if origin_map.Kind() != reflect.Ptr {
-		return nil, nil, nil, nil, nil, errors.New("Invalid argument 'list interface{}'")
-	}
-	map_pointer := origin_map.Elem()
-	if !map_pointer.IsValid() {
-		return nil, nil, nil, nil, nil, errors.New("Invalid argument 'list interface{}'")
-	}
-	origin_map = map_pointer
-	// get list typed
-	type_interface := reflect.TypeOf(key_map)
-	// get list typed pointer typed
-	type_map := type_interface.Elem()
-	// get element typed
-	type_slice := type_map.Elem()
-	// get element typed
-	type_keys := type_map.Key()
-	if type_keys.Kind() != reflect.String && type_keys.Kind() != reflect.Int64 {
-		return nil, nil, nil, nil, nil, errors.New("map key must be of type string or int64'")
-	}
-	type_element := type_slice.Elem()
-	type_key := type_keys.Kind()
-	return &map_pointer, &type_map, &type_key, &type_slice, &type_element, nil
-}
-
-// parse slice interface typed
-// returm [slice_pointer,origin_slice,element_type,error]
-func (db *defaultDB) parseSliceInterface(list interface{}, clearList bool) (*reflect.Value, *reflect.Value, *reflect.Type, error) {
-	// read metainfo
-	typed := reflect.ValueOf(list)
-	if typed.Kind() != reflect.Ptr {
-		return nil, nil, nil, errors.New("Invalid argument 'list interface{}'")
-	}
-	slice_pointer := typed.Elem()
-	if !slice_pointer.IsValid() {
-		return nil, nil, nil, errors.New("Invalid argument 'list interface{}'")
-	}
-	origin_slice := slice_pointer
-	// get list typed
-	type_interface := reflect.TypeOf(list)
-	// get list typed pointer typed
-	type_slice := type_interface.Elem()
-	// get element typed
-	element_type := type_slice.Elem()
-	if clearList {
-		origin_slice = reflect.Zero(origin_slice.Type())
-	}
-	return &slice_pointer, &origin_slice, &element_type, nil
+func (db *defaultDB) StorageDirectory() string {
+	return db.basePath
 }
 
 func (db *defaultDB) QueryTimeline(timeline time.Time, out_list interface{}) error {
@@ -114,7 +62,7 @@ func (db *defaultDB) QueryTimeline(timeline time.Time, out_list interface{}) err
 	timebaseline := util.GetUnixOfDay(timeline)
 	storeFile, err := db.loadFile(timebaseline, false)
 	if err == nil {
-		slice_pointer, origin_slice, element_type, err := db.parseSliceInterface(out_list, false)
+		slice_pointer, origin_slice, element_type, err := util.ParseSlicePointer(out_list, false)
 		if err != nil {
 			return err
 		}
@@ -128,7 +76,7 @@ func (db *defaultDB) QueryBetween(begin time.Time, end time.Time, out_map interf
 	if dis < 0 {
 		return errors.New("is not a valid time range")
 	}
-	map_pointer, map_type, key_type, slice_type, element_type, err := db.parseMapInterface(out_map)
+	map_pointer, map_type, key_type, slice_type, element_type, err := util.ParseMapPointer(out_map)
 	if err != nil {
 		return err
 	}
@@ -167,12 +115,15 @@ func (db *defaultDB) Write(timeline time.Time, data ...StoreData) error {
 }
 
 func (db *defaultDB) loadFile(timebaseline int64, autoCreated bool) (StoreFile, error) {
+	if db.isDisposed {
+		return nil, errors.New("Database object has been destroyed")
+	}
 	db.mutex.Lock()
 	defer db.mutex.Unlock()
 	file := db.opendFiles[timebaseline]
 	if file == nil {
 		filepath := filepath.Join(db.basePath, fmt.Sprintf("%d.bin", timebaseline))
-		stroe, err := loadStoreFile(filepath, timebaseline, autoCreated)
+		stroe, err := loadStoreFile(filepath, timebaseline, db.timeKeyFormat, autoCreated)
 		if err != nil {
 			return nil, err
 		}
@@ -196,41 +147,25 @@ func (db *defaultDB) DeleteStorageFile(timeline time.Time) error {
 	filepath := filepath.Join(db.basePath, fmt.Sprintf("%d.bin", timebaseline))
 	if util.FileExist(filepath) {
 		db.freeFile(timebaseline)
-		os.Remove(filepath)
-		return nil
+		return os.Remove(filepath)
 	}
 	return errors.New("file not found")
 }
 
-func (db *defaultDB) monitorRetention() {
-	ticker := time.NewTicker(time.Second)
-	quit := make(chan os.Signal)
-	signal.Notify(quit, os.Interrupt, os.Kill, syscall.SIGINT, syscall.SIGQUIT)
-	for {
-		select {
-		case <-quit:
-			return
-		case <-ticker.C:
-			now := time.Now()
-			filepath.Walk(db.basePath, func(path string, info os.FileInfo, err error) error {
-				if err != nil || info.IsDir() || !strings.HasSuffix(path, ".bin") {
-					return nil
-				}
-				filetimestamp, _, ok := strings.Cut(info.Name(), ".")
-				if ok {
-					if num, err := strconv.ParseInt(filetimestamp, 0, 8); err == nil {
-						timestamp := time.Unix(num, 0)
-						if now.Sub(timestamp) > db.retention {
-							// 释放文件
-							db.freeFile(num)
-							// 删除文件
-							os.Remove(path)
-						}
-					}
-				}
-				return nil
-			})
-
-		}
+func (db *defaultDB) Dispose() error {
+	db.mutex.Lock()
+	defer db.mutex.Unlock()
+	db.isDisposed = true
+	for k, _ := range db.opendFiles {
+		db.freeFile(k)
 	}
+	return unRegisterDB(db)
+}
+
+func (db *defaultDB) IsExpired(timeline time.Time, now *time.Time) bool {
+	if now == nil {
+		n := time.Now()
+		now = &n
+	}
+	return now.Sub(timeline) > db.retention
 }
