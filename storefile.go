@@ -91,18 +91,16 @@ func (sf *storeFile) QueryBetween(begin time.Time, end time.Time, map_object ref
 		slice := reflect.MakeSlice(*slice_type, 0, 16)
 		// 创建 切片指针
 		lpSlice := reflect.New(*slice_type)
-		// 获取切片指针
-		slice_pointer := lpSlice.Elem()
 		// 指针指向 切片对象
-		slice_pointer.Set(slice)
-		err := sf.queryByTimeline(timeline, &slice_pointer, &slice, element_type)
+		lpSlice.Elem().Set(slice)
+		err := sf.queryByTimeline(timeline, &lpSlice, &slice, element_type)
 		if err != nil && err != io.EOF {
 			return err
 		}
 		// 获取 out_map key 类型
 		key := sf.GetReflectKey(time.Unix(timeline, 0), *key_type)
 		// 添加至 Map内
-		map_object.SetMapIndex(*key, slice_pointer)
+		map_object.SetMapIndex(*key, lpSlice.Elem())
 	}
 	return nil
 }
