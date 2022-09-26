@@ -16,7 +16,11 @@ import (
 
 func InitDB() snapsdb.SnapsDB {
 	snapPath := filepath.Join(util.AssemblyDir(), "../snapdata/proc")
-	db, err := snapsdb.InitDB(snapsdb.WithDataPath(snapPath), snapsdb.WithDataRetention(snapsdb.TimestampOf14Day))
+	db, err := snapsdb.InitDB(
+		snapsdb.WithDataPath(snapPath),
+		snapsdb.WithDataRetention(snapsdb.TimestampOf14Day),
+		snapsdb.WithTimeKeyFormat("2006-01-02 15:04:05"),
+	)
 	if err != nil {
 		panic(err)
 	}

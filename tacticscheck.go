@@ -2,6 +2,7 @@ package snapsdb
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -23,6 +24,9 @@ var _initcheck bool
 func registerDB(db SnapsDB) (SnapsDB, error) {
 	_checkmutex.Lock()
 	defer _checkmutex.Unlock()
+	if _db_instances[db.StorageDirectory()] != nil {
+		return nil, fmt.Errorf("the data directory XX has already been initialized, and the same data directory cannot be initialized more than once.")
+	}
 	_db_instances[db.StorageDirectory()] = db
 	checkDBStorage(db, time.Now())
 	if !_initcheck {
