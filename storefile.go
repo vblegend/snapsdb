@@ -3,7 +3,6 @@ package snapsdb
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 
 	"io"
 	"os"
@@ -45,19 +44,20 @@ type storeFile struct {
 	TimelineEnd   int64      // storage file time base line of end
 	file          *os.File   // storage file access object
 	mutex         sync.Mutex // access lock
+	timeKeyFormat string
 }
 
 // load file object from timebaseline
 // autoCreated = true  automatically created and initialized when file does not exist
 // autoCreated = fakse return error if file does not exist
-func loadStoreFile(filename string, timebaseline int64, autoCreated bool) (StoreFile, error) {
-	filev := storeFile{TimelineBegin: timebaseline, TimelineEnd: timebaseline + TimelineLengthOfDay}
+func loadStoreFile(filename string, timebaseline int64, timeKeyFormat string, autoCreated bool) (StoreFile, error) {
+	filev := storeFile{TimelineBegin: timebaseline, TimelineEnd: timebaseline + TimelineLengthOfDay, timeKeyFormat: timeKeyFormat}
 	var err error
 	if !util.FileExist(filename) {
 		if autoCreated {
 			err = filev.init(filename)
 		} else {
-			return nil, fmt.Errorf("file “%s” not found", filename)
+			return nil, ErrorDBFileNotHit
 		}
 	} else {
 		err = filev.open(filename)
@@ -73,7 +73,7 @@ func (sf *storeFile) QueryBetween(begin time.Time, end time.Time, map_object ref
 	defer sf.Unlock()
 	hitFile := end.Unix() > sf.TimelineBegin && begin.Unix() < sf.TimelineEnd
 	if !hitFile {
-		return errors.New("查询时间与文件不一致")
+		return errors.New("beyond the scope of the query")
 	}
 	beginTimeline := begin.Unix()
 	if sf.TimelineBegin > beginTimeline {
@@ -92,16 +92,14 @@ func (sf *storeFile) QueryBetween(begin time.Time, end time.Time, map_object ref
 		lpSlice := reflect.New(*slice_type)
 		// 指针指向 切片对象
 		lpSlice.Elem().Set(slice)
-		// 获取切片指针
-		slice_pointer := lpSlice.Elem()
-		err := sf.queryByTimeline(timeline, &slice_pointer, &slice, element_type)
+		err := sf.queryByTimeline(timeline, &lpSlice, &slice, element_type)
 		if err != nil && err != io.EOF {
 			return err
 		}
 		// 获取 out_map key 类型
 		key := sf.GetReflectKey(time.Unix(timeline, 0), *key_type)
 		// 添加至 Map内
-		map_object.SetMapIndex(*key, slice_pointer)
+		map_object.SetMapIndex(*key, lpSlice.Elem())
 	}
 	return nil
 }
@@ -110,7 +108,7 @@ func (sf *storeFile) GetReflectKey(timeline time.Time, key_type reflect.Kind) *r
 	var value reflect.Value
 	switch key_type {
 	case reflect.String:
-		value = reflect.ValueOf(timeline.Format("2006-01-02 15:04:05"))
+		value = reflect.ValueOf(timeline.Format(sf.timeKeyFormat))
 	case reflect.Int64:
 		value = reflect.ValueOf(timeline.Unix())
 	case reflect.Uint64:
@@ -168,10 +166,7 @@ func (sf *storeFile) queryByTimeline(timeline int64, slice_pointer *reflect.Valu
 		}
 		nextRecord = _nextdata
 	}
-	kls := origin_slice.Interface()
-	kil := slice_pointer.Interface()
-	fmt.Println(kil, kls)
-	slice_pointer.Set(*origin_slice)
+	slice_pointer.Elem().Set(*origin_slice)
 	return nil
 }
 
@@ -214,9 +209,9 @@ func (sf *storeFile) Write(timestamp time.Time, data ...StoreData) error {
 	return nil
 }
 
-func (sf *storeFile) ReadMateInfo(timeline int64) (*TimelineMateInfo, error) {
+func (sf *storeFile) ReadMateInfo(timeline int64) (*timelineMateInfo, error) {
 	if timeline < sf.TimelineBegin || timeline > sf.TimelineEnd {
-		return nil, errors.New("超出范围。")
+		return nil, errors.New("beyond the scope of the query.")
 	}
 	buffer := make([]byte, 8)
 	disc := timeline - sf.TimelineBegin
@@ -224,10 +219,10 @@ func (sf *storeFile) ReadMateInfo(timeline int64) (*TimelineMateInfo, error) {
 	sf.file.ReadAt(buffer, offset)
 	first := binary.LittleEndian.Uint32(buffer[:4])
 	last := binary.LittleEndian.Uint32(buffer[4:])
-	return &TimelineMateInfo{TLFirst: first, TLLast: last}, nil
+	return &timelineMateInfo{TLFirst: first, TLLast: last}, nil
 }
 
-func (sf *storeFile) writeMateInfo(timeline int64, info *TimelineMateInfo) error {
+func (sf *storeFile) writeMateInfo(timeline int64, info *timelineMateInfo) error {
 	if timeline < sf.TimelineBegin || timeline > sf.TimelineEnd {
 		return errors.New("超出范围。")
 	}
@@ -273,4 +268,7 @@ func (sf *storeFile) init(filepath string) error {
 	}
 	sf.file = file
 	return err
+}
+func (sf *storeFile) TimeBaseline() int64 {
+	return sf.TimelineBegin
 }

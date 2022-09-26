@@ -1,11 +1,8 @@
 package test
 
 import (
-	"bufio"
 	"fmt"
-	"io"
 	"path/filepath"
-	"reflect"
 
 	"testing"
 	"time"
@@ -19,7 +16,11 @@ import (
 
 func InitDB() snapsdb.SnapsDB {
 	snapPath := filepath.Join(util.AssemblyDir(), "../snapdata/proc")
-	db, err := snapsdb.InitDB(snapsdb.WithDataPath(snapPath), snapsdb.WithDataRetention(time.Hour*24*14))
+	db, err := snapsdb.InitDB(
+		snapsdb.WithDataPath(snapPath),
+		snapsdb.WithDataRetention(snapsdb.TimestampOf14Day),
+		snapsdb.WithTimeKeyFormat("2006-01-02 15:04:05"),
+	)
 	if err != nil {
 		panic(err)
 	}
@@ -42,7 +43,7 @@ func TestSnapshotDBWrite(_ *testing.T) {
 
 	start := time.Now() // 获取当前时间
 	for i := 0; i < count; i++ {
-		timestamp := time.Date(2020, 9, 22, 0, 0, i, 0, time.Local)
+		timestamp := time.Date(2022, 9, 22, 0, 0, i, 0, time.Local)
 		db.Write(timestamp, array...)
 	}
 	cost := time.Since(start)
@@ -65,7 +66,7 @@ func TestSnapshotDBWriteOnce(t *testing.T) {
 	v3 := &types.ProcessInfo{Pid: 3, Name: "docker-compose - 3", Cpu: 30.03, Mem: 93.45, Virt: 30000000000, Res: 330000000000000}
 	v4 := &types.ProcessInfo{Pid: 4, Name: "docker-compose - 4", Cpu: 40.04, Mem: 94.56, Virt: 40000000000, Res: 440000000000000}
 	v5 := &types.ProcessInfo{Pid: 5, Name: "docker-compose - 5", Cpu: 50.05, Mem: 95.67, Virt: 50000000000, Res: 550000000000000}
-	timestamp := time.Now()
+	timestamp := time.Date(2022, 01, 01, 01, 01, 01, 01, time.Local)
 	fmt.Println(timestamp.Format("2006-01-02 15:04:05"))
 	start := time.Now() // 获取当前时间
 	db.Write(timestamp, v1, v2, v3, v4, v5)
@@ -76,115 +77,31 @@ func TestSnapshotDBWriteOnce(t *testing.T) {
 // 测试 snapshotDB 的时间线查询
 func TestSnapshotDBQuery(t *testing.T) {
 	db := InitDB()
-	timestamp := time.Date(2020, 9, 22, 13, 27, 43, 0, time.Local)
+	timestamp := time.Date(2022, 9, 22, 13, 27, 43, 0, time.Local)
 	list := make([]types.ProcessInfo, 0)
-	// var list []types.ProcessInfo
 	list = append(list, types.ProcessInfo{Pid: 5, Name: "docker-compose - 1111", Cpu: 50.05, Mem: 95.67, Virt: 50000000000, Res: 550000000000000})
 	start := time.Now()
-	db.QueryTimeline(timestamp, &list)
+	err := db.QueryTimeline(timestamp, &list)
 	cost := time.Since(start)
+	if err != nil {
+		fmt.Println(util.Red(err.Error()))
+	}
+	fmt.Println(list)
 	fmt.Printf("查询完毕，用时%v\n", cost)
-	t.Log(list)
 }
 
 // 测试 snapshotDB 的时间段查询
 func TestSnapshotDBQueryBetween(t *testing.T) {
 	db := InitDB()
-	beginTimestamp := time.Date(2020, 9, 22, 5, 0, 00, 0, time.Local)
-	endTimestamp := time.Date(2020, 9, 22, 5, 2, 00, 0, time.Local)
+	beginTimestamp := time.Date(2022, 9, 22, 5, 0, 00, 0, time.Local)
+	endTimestamp := time.Date(2022, 9, 22, 5, 2, 00, 0, time.Local)
 	list := make(map[string][]types.ProcessInfo)
 	start := time.Now()
-	db.QueryBetween(beginTimestamp, endTimestamp, &list)
+	err := db.QueryBetween(beginTimestamp, endTimestamp, &list)
 	cost := time.Since(start)
-	fmt.Printf("查询完毕，用时%v\n", cost)
-	t.Log(list)
-}
-
-func TestTimeline(t *testing.T) {
-	tn := time.Now()
-	year, month, day := tn.Date()
-	timeline := time.Date(year, month, day, tn.Hour(), tn.Minute(), tn.Second(), 0, time.Local).Unix()
-	fmt.Printf("%d-%d", timeline, tn.Unix())
-}
-
-func TestXXXASDASD(t *testing.T) {
-	list := make(map[string][]types.ProcessInfo)
-	list["xx"] = make([]types.ProcessInfo, 0)
-	testReflect(&list)
+	if err != nil && err != snapsdb.ErrorDBFileNotHit {
+		fmt.Println(util.Red(err.Error()))
+	}
 	fmt.Println(list)
-}
-
-func testReflect(list interface{}) {
-	// 获取slice的类型
-	// read metainfo
-	origin_slice := reflect.ValueOf(list)
-	if origin_slice.Kind() != reflect.Ptr {
-		// return nil, nil, nil, errors.New("Invalid argument 'list interface{}'")
-	}
-	map_pointer := origin_slice.Elem()
-	if !map_pointer.IsValid() {
-		// return nil, nil, nil, errors.New("Invalid argument 'list interface{}'")
-	}
-	origin_slice = map_pointer
-	// get list typed
-	type_interface := reflect.TypeOf(list)
-	// get list typed pointer typed
-	type_map := type_interface.Elem()
-	// get element typed
-	type_slice := type_map.Elem()
-	// get element typed
-	type_key := type_map.Key()
-
-	type_element := type_slice.Elem()
-	// fmt.Print(type_interface, type_slice, element_type)
-	// var type_interface = reflect.TypeOf(list)
-	fmt.Println("slices's kind:", type_interface.Kind(), ", name:", type_interface.Name())
-	// var type_slice = type_interface.Elem()
-	fmt.Println("map's kind:", type_map.Kind(), ", name:", type_map.Name())
-
-	// var type_element = type_slice.Elem()
-	fmt.Println("map_key's kind:", type_key.Kind(), ", name:", type_key.Name())
-
-	// var type_element = type_slice.Elem()
-	fmt.Println("map_value's kind:", type_slice.Kind(), ", name:", type_slice.Name())
-	// var type_element = type_slice.Elem()
-	fmt.Println("element's kind:", type_element.Kind(), ", name:", type_element.Name())
-
-	// slice := reflect.New(type_slice)
-	// slice := ss.Interface()
-	// fmt.Print(vx)
-
-	// element_1 := reflect.New(type_element)
-	// element_2 := element_1.Interface()
-
-	newMap := reflect.MakeMap(type_map)
-	slice := reflect.MakeSlice(type_slice, 0, 16)
-	newMap.SetMapIndex(reflect.ValueOf("2022-01-01"), slice)
-	map_pointer.Set(newMap)
-
-}
-
-func TestPipe(t *testing.T) {
-	// reflectValue := reflect.Indirect(reflect.ValueOf(value))
-	// reflectValue.Slice(i, ends).Interface()
-	pipeReader, pipeWriter := io.Pipe()
-	rr := bufio.NewReader(io.Reader(pipeReader))
-	ww := bufio.NewWriter(io.Writer(pipeWriter))
-	v := make([]byte, 5)
-	v[0] = 8
-	v[1] = 16
-	v[2] = 32
-	v[3] = 64
-	v[4] = 128
-
-	ww.Write(v)
-
-	ww.WriteString("Hello,超级棒")
-
-	// binary.Write(ww, binary.LittleEndian, uint32(0))
-
-	size := rr.Size()
-	buffer := make([]byte, size)
-	rr.Read(buffer)
-
+	fmt.Printf("查询完毕，用时%v\n", cost)
 }

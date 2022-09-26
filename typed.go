@@ -1,6 +1,7 @@
 package snapsdb
 
 import (
+	"errors"
 	"reflect"
 	"time"
 
@@ -8,17 +9,20 @@ import (
 )
 
 // 时间线元信息
-type TimelineMateInfo struct {
+type timelineMateInfo struct {
 	TLFirst uint32 // Timeline first record address , for data query
 	TLLast  uint32 // Timeline last record address , for data write
 }
 
+type dbOptions struct {
+	dataPath      string
+	retention     time.Duration
+	timekeyformat string
+}
+
 type StoreData protoreflect.ProtoMessage
 
-type dbOptions struct {
-	dataPath  string
-	retention time.Duration
-}
+var ErrorDBFileNotHit = errors.New("one or more files were not hit(not found datastore file).")
 
 /* time */
 const (
@@ -30,6 +34,10 @@ const (
 	TimestampOf14Day = TimestampOf1Day * 14
 	// Timestamp length in 30 day
 	TimestampOf30Day = TimestampOf1Day * 30
+	// Timestamp length in 1 year
+	TimestampOf1Year = TimestampOf1Day * 365
+	// Timestamp length in 100 year
+	TimestampOf100Year = TimestampOf1Year * 100
 )
 
 /* stroage file */
@@ -49,34 +57,60 @@ const (
 )
 
 type SnapsDB interface {
-	// 写入数据 至时间线 timestamp
+	// write one or more pieces of data to the timeline.
 	Write(timeline time.Time, data ...StoreData) error
-	// 查询某个时间线数据，并返回至列表---
-	// list类型应为 继承自 protoreflect.ProtoMessage 的数组
-	QueryTimeline(timeline time.Time, lp_out_list interface{}) error
-	// 查询某个时间区间数据，返回数据至 outmap,
-	// StoreData 类型为 protobuf.proto 生成
+	// Query a certain timeline data, and return to the slice
+	// the slice type should be inherited from protoreflect.ProtoMessage
 	/*
-		var out_map [string][]StoreData // keys is timeline.Format("2006-01-02 15:04:05")
+		@example
+		timestamp := time.Date(2020, 9, 22, 13, 27, 43, 0, time.Local)
+		list := make([]types.ProcessInfo, 0)
+		db.QueryTimeline(timestamp, &list)
+	*/
+	QueryTimeline(timeline time.Time, lp_out_slice interface{}) error
+	// query the data of a certain time interval and return the data to lp_out_map,
+	// typed protobuf.proto
+	// ErrorDBFileNotHit
+	/*
+		var out_map [string][]StoreData // keys is timeline.Format(timekeyformat)
 		var out_map [uint32][]StoreData // keys is timeline.Unix()
 		var out_map [int64][]StoreData  // keys is timeline.Unix()
 		var out_map [uint64][]StoreData // keys is timeline.Unix()
+
+		@example
+
+		db := InitDB()
+		beginTimestamp := time.Date(2020, 9, 22, 5, 0, 00, 0, time.Local)
+		endTimestamp := time.Date(2020, 9, 22, 5, 2, 00, 0, time.Local)
+		map := make(map[string][]types.ProcessInfo)
+		db.QueryBetween(beginTimestamp, endTimestamp, &map)
 	*/
 	QueryBetween(begin time.Time, end time.Time, lp_out_map interface{}) error
 
-	/* 删除时间线所属当天的存储文件*/
+	/* Delete the stored file for the current day of the timeline */
 	DeleteStorageFile(timeline time.Time) error
+
+	/* Get data file storage directory */
+	StorageDirectory() string
+
+	/* Determine whether the specified date has expired in the database */
+	IsExpired(timeline time.Time, now *time.Time) bool
+
+	/* Destroy database objects */
+	Dispose() error
 }
 
 type StoreFile interface {
 	// 写入数据
 	Write(timestamp time.Time, data ...StoreData) error
-	// 查询某个时间线数据，并返回至列表
+	// query a timeline for data and return to a list
 	QueryTimeline(timestamp time.Time, slice_pointer *reflect.Value, origin_slice *reflect.Value, element_type *reflect.Type) error
-	// 查询某个时间区间数据
+	// Query the data of a certain time interval and fill it with map[][]typed
 	QueryBetween(begin time.Time, end time.Time, map_object reflect.Value, key_type *reflect.Kind, slice_type *reflect.Type, element_type *reflect.Type) error
-	// 关闭文件
+	// close file
 	Close()
-	// 读取文件时间线元信息
-	ReadMateInfo(timeline int64) (*TimelineMateInfo, error)
+	// read file timeline meta information
+	ReadMateInfo(timeline int64) (*timelineMateInfo, error)
+	/* get file  time base line*/
+	TimeBaseline() int64
 }
