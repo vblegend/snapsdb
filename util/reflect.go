@@ -10,15 +10,10 @@ import (
 func ParseMapPointer(key_map interface{}) (*reflect.Value, *reflect.Type, *reflect.Kind, *reflect.Type, *reflect.Type, error) {
 	// 获取slice的类型
 	// read metainfo
-	origin_map := reflect.ValueOf(key_map)
-	if origin_map.Kind() != reflect.Ptr {
+	map_pointer := reflect.ValueOf(key_map)
+	if map_pointer.Kind() != reflect.Ptr {
 		return nil, nil, nil, nil, nil, errors.New("Invalid argument 'list interface{}'")
 	}
-	map_pointer := origin_map.Elem()
-	if !map_pointer.IsValid() {
-		return nil, nil, nil, nil, nil, errors.New("Invalid argument 'list interface{}'")
-	}
-	origin_map = map_pointer
 	// get list typed
 	type_interface := reflect.TypeOf(key_map)
 	// get list typed pointer typed
@@ -39,15 +34,11 @@ func ParseMapPointer(key_map interface{}) (*reflect.Value, *reflect.Type, *refle
 // returm [slice_pointer,origin_slice,element_type,error]
 func ParseSlicePointer(list interface{}, clearList bool) (*reflect.Value, *reflect.Value, *reflect.Type, error) {
 	// read metainfo
-	typed := reflect.ValueOf(list)
-	if typed.Kind() != reflect.Ptr {
+	slice_pointer := reflect.ValueOf(list)
+	if slice_pointer.Kind() != reflect.Ptr {
 		return nil, nil, nil, errors.New("invalid argument 'list interface{}'")
 	}
-	slice_pointer := typed.Elem()
-	if !slice_pointer.IsValid() {
-		return nil, nil, nil, errors.New("invalid argument 'list interface{}'")
-	}
-	origin_slice := slice_pointer
+	origin_slice := slice_pointer.Elem()
 	// get list typed
 	type_interface := reflect.TypeOf(list)
 	// get list typed pointer typed

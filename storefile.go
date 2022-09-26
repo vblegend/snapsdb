@@ -91,10 +91,10 @@ func (sf *storeFile) QueryBetween(begin time.Time, end time.Time, map_object ref
 		slice := reflect.MakeSlice(*slice_type, 0, 16)
 		// 创建 切片指针
 		lpSlice := reflect.New(*slice_type)
-		// 指针指向 切片对象
-		lpSlice.Elem().Set(slice)
 		// 获取切片指针
 		slice_pointer := lpSlice.Elem()
+		// 指针指向 切片对象
+		slice_pointer.Set(slice)
 		err := sf.queryByTimeline(timeline, &slice_pointer, &slice, element_type)
 		if err != nil && err != io.EOF {
 			return err
@@ -169,7 +169,7 @@ func (sf *storeFile) queryByTimeline(timeline int64, slice_pointer *reflect.Valu
 		}
 		nextRecord = _nextdata
 	}
-	slice_pointer.Set(*origin_slice)
+	slice_pointer.Elem().Set(*origin_slice)
 	return nil
 }
 

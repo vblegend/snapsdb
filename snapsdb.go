@@ -100,7 +100,7 @@ func (db *defaultDB) QueryBetween(begin time.Time, end time.Time, out_map interf
 		}
 		timebasetime = timebasetime.Add(TimestampOf1Day)
 	}
-	map_pointer.Set(map_object)
+	map_pointer.Elem().Set(map_object)
 	return nil
 }
 
