@@ -95,13 +95,13 @@ func TestSnapshotDBQueryBetween(t *testing.T) {
 	db := InitDB()
 	beginTimestamp := time.Date(2022, 9, 22, 5, 0, 00, 0, time.Local)
 	endTimestamp := time.Date(2022, 9, 22, 5, 2, 00, 0, time.Local)
-	list := make(map[string][]types.ProcessInfo)
+	outmap := make(map[string][]types.ProcessInfo)
 	start := time.Now()
-	err := db.QueryBetween(beginTimestamp, endTimestamp, &list)
+	err := db.QueryBetween(beginTimestamp, endTimestamp, &outmap)
 	cost := time.Since(start)
 	if err != nil && err != snapsdb.ErrorDBFileNotHit {
 		fmt.Println(util.Red(err.Error()))
 	}
-	fmt.Println(list)
+	fmt.Println(outmap)
 	fmt.Printf("查询完毕，用时%v\n", cost)
 }

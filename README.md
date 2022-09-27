@@ -1,18 +1,20 @@
 # snapsdb
 golang  snapsort objects store database
 
-snapsdb 是一款对象列表快照数据库，使用 protobuf 作为对象的序列化方式，这意味着您的对象必须由protoc指令创建，这样带来的好处是序列化性能的大幅度提升。
+snapsdb 是一款对象数据列表快照数据库，它诞生的目的是为了解决瞬间查询某些数据在历史上某一时刻的数据快照，
+它使用 protobuf 作为对象的序列化方式，这意味着您的对象必须由protoc指令创建，这样带来的好处是序列化性能的大幅度提升。
 
 snapsdb是以时间线为单位的，每天会生成一个单独的文件。 在这个文件的开头存储着当天86400秒的所有时间线索引，这个索引分别是 first  last 两条记录，first负责数据查询读取，last负责新的数据写入。 这两个对象所指向的是一个单向链表，这样我们可以在任意时间存储任意时间线的数据。
 
-⚠️ 这个数据库不支持索引， 不支持数据聚合，目前是一个单纯的数据存储库
+⚠️ 这个数据库不支持索引， 不支持数据聚合，目前它仅完成了数据写入和数据查询的功能。
 
-## import library💎
+
+## use library💎
 ``` bash
  go get -u github.com/vblegend/snapsdb
 ```
 
-## 📦 test code 🤝
+## 📦 look look test code 🤝
 
 ``` golang
 package test
@@ -112,14 +114,14 @@ func TestSnapshotDBQueryBetween(t *testing.T) {
 	db := InitDB()
 	beginTimestamp := time.Date(2022, 9, 22, 5, 0, 00, 0, time.Local)
 	endTimestamp := time.Date(2022, 9, 22, 5, 2, 00, 0, time.Local)
-	list := make(map[string][]types.ProcessInfo)
+	outmap := make(map[string][]types.ProcessInfo)
 	start := time.Now()
-	err := db.QueryBetween(beginTimestamp, endTimestamp, &list)
+	err := db.QueryBetween(beginTimestamp, endTimestamp, &outmap)
 	cost := time.Since(start)
 	if err != nil && err != snapsdb.ErrorDBFileNotHit {
 		fmt.Println(util.Red(err.Error()))
 	}
-	fmt.Println(list)
+	fmt.Println(outmap)
 	fmt.Printf("查询完毕，用时%v\n", cost)
 }
 
