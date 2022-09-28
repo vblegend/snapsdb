@@ -1,6 +1,7 @@
 package test
 
 import (
+	"bytes"
 	"fmt"
 	"path/filepath"
 
@@ -104,4 +105,15 @@ func TestSnapshotDBQueryBetween(t *testing.T) {
 	}
 	fmt.Println(outmap)
 	fmt.Printf("查询完毕，用时%v\n", cost)
+}
+
+// Next 批量写入使用 *bytes.Buffer  一次性写入
+// 支持 keymap 数据存储 REF https://github.com/sbunce/bson
+func TestXxx(t *testing.T) {
+	buf := bytes.NewBuffer(make([]byte, 0))
+
+	buf.WriteString("abcde")
+	data := buf.Bytes()
+	fmt.Println(data)
+
 }
