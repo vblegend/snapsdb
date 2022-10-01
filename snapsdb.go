@@ -57,6 +57,10 @@ func (db *defaultDB) StorageDirectory() string {
 	return db.basePath
 }
 
+func (db *defaultDB) QueryTimelineUnix(timeline int64, lp_out_slice interface{}) error {
+	return db.QueryTimeline(time.Unix(timeline, 0), lp_out_slice)
+}
+
 func (db *defaultDB) QueryTimeline(timeline time.Time, out_list interface{}) error {
 	// 获取时间戳的时间基线，当天的0点时间戳，文件名
 	timebaseline := util.GetUnixOfDay(timeline)
@@ -69,9 +73,13 @@ func (db *defaultDB) QueryTimeline(timeline time.Time, out_list interface{}) err
 		if err != nil {
 			return err
 		}
-		return storeFile.QueryTimeline(timeline, slice_pointer, origin_slice, element_type)
+		return storeFile.QueryTimeline(timeline.Unix(), slice_pointer, origin_slice, element_type)
 	}
 	return nil
+}
+
+func (db *defaultDB) QueryBetweenUnix(begin int64, end int64, lp_out_map interface{}) error {
+	return db.QueryBetween(time.Unix(begin, 0), time.Unix(end, 0), lp_out_map)
 }
 
 func (db *defaultDB) QueryBetween(begin time.Time, end time.Time, out_map interface{}) error {
@@ -97,7 +105,7 @@ func (db *defaultDB) QueryBetween(begin time.Time, end time.Time, out_map interf
 		if err != nil && err != ErrorDBFileNotHit {
 			return err
 		} else if err == nil {
-			err = storeFile.QueryBetween(begin, end, map_object, key_type, slice_type, element_type)
+			err = storeFile.QueryBetween(begin.Unix(), end.Unix(), map_object, key_type, slice_type, element_type)
 			if err != nil {
 				return err
 			}
@@ -108,6 +116,10 @@ func (db *defaultDB) QueryBetween(begin time.Time, end time.Time, out_map interf
 	return nil
 }
 
+func (db *defaultDB) WriteUnix(timeline int64, data ...StoreData) error {
+	return db.Write(time.Unix(timeline, 0), data...)
+}
+
 func (db *defaultDB) Write(timeline time.Time, data ...StoreData) error {
 	// 获取时间戳的时间基线，当天的0点时间戳，文件名
 	timebaseline := util.GetUnixOfDay(timeline)
@@ -115,7 +127,7 @@ func (db *defaultDB) Write(timeline time.Time, data ...StoreData) error {
 	if err != nil {
 		return err
 	}
-	return storeFile.Write(timeline, data...)
+	return storeFile.Write(timeline.Unix(), data...)
 }
 
 func (db *defaultDB) loadFile(timebaseline int64, autoCreated bool) (StoreFile, error) {
@@ -144,6 +156,10 @@ func (db *defaultDB) freeFile(timebaseline int64) {
 		db.opendFiles[timebaseline].Close()
 		delete(db.opendFiles, timebaseline)
 	}
+}
+
+func (db *defaultDB) DeleteStorageFileUnix(timeline int64) error {
+	return db.DeleteStorageFile(time.Unix(timeline, 0))
 }
 
 func (db *defaultDB) DeleteStorageFile(timeline time.Time) error {

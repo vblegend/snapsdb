@@ -1,6 +1,7 @@
 package snapsdb
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 
@@ -68,18 +69,18 @@ func loadStoreFile(filename string, timebaseline int64, timeKeyFormat string, au
 	return &filev, nil
 }
 
-func (sf *storeFile) QueryBetween(begin time.Time, end time.Time, map_object reflect.Value, key_type *reflect.Kind, slice_type *reflect.Type, element_type *reflect.Type) error {
+func (sf *storeFile) QueryBetween(begin int64, end int64, map_object reflect.Value, key_type *reflect.Kind, slice_type *reflect.Type, element_type *reflect.Type) error {
 	sf.Lock()
 	defer sf.Unlock()
-	hitFile := end.Unix() > sf.TimelineBegin && begin.Unix() < sf.TimelineEnd
+	hitFile := end > sf.TimelineBegin && begin < sf.TimelineEnd
 	if !hitFile {
 		return errors.New("beyond the scope of the query")
 	}
-	beginTimeline := begin.Unix()
+	beginTimeline := begin
 	if sf.TimelineBegin > beginTimeline {
 		beginTimeline = sf.TimelineBegin
 	}
-	endTimeline := end.Unix()
+	endTimeline := end
 	if sf.TimelineEnd < endTimeline {
 		endTimeline = sf.TimelineEnd
 	}
@@ -122,12 +123,9 @@ func (sf *storeFile) GetReflectKey(timeline time.Time, key_type reflect.Kind) *r
 }
 
 // 查询某个时间线上的所有数据
-func (sf *storeFile) QueryTimeline(timestamp time.Time, slice_pointer *reflect.Value, origin_slice *reflect.Value, element_type *reflect.Type) error {
+func (sf *storeFile) QueryTimeline(timeline int64, slice_pointer *reflect.Value, origin_slice *reflect.Value, element_type *reflect.Type) error {
 	sf.Lock()
 	defer sf.Unlock()
-	// 获取时间戳的所属时间线
-	timeline := timestamp.Unix()
-	// timeline := time.Date(timestamp.Year(), timestamp.Month(), timestamp.Day(), timestamp.Hour(), timestamp.Minute(), timestamp.Second(), 0, time.Local).Unix()
 	return sf.queryByTimeline(timeline, slice_pointer, origin_slice, element_type)
 }
 
@@ -170,41 +168,59 @@ func (sf *storeFile) queryByTimeline(timeline int64, slice_pointer *reflect.Valu
 	return nil
 }
 
-func (sf *storeFile) Write(timestamp time.Time, data ...StoreData) error {
+func (sf *storeFile) Write(timeline int64, data ...StoreData) error {
+	lenObject := len(data)
+	if lenObject == 0 {
+		return nil
+	}
 	sf.Lock()
 	defer sf.Unlock()
-	// 获取时间戳的所属时间线
-	timeline := timestamp.Unix()
 	// read metainfo
 	meta, err := sf.ReadMateInfo(timeline)
 	if err != nil {
 		return err
 	}
-	for _, item := range data {
-		position, err := sf.file.Seek(0, 2)
-		if err != nil {
-			return err
-		}
+	// get file eof position
+	writePos, err := sf.file.Seek(0, 2)
+	if err != nil {
+		return err
+	}
+	// create batch buf
+	writeBuf := bytes.NewBuffer(make([]byte, 0))
+	var linkedOfLast int64 = 0
+	if meta.TLLast != 0 {
+		linkedOfLast = int64(meta.TLLast) + NextDataOffset
+	}
+
+	for i, item := range data {
+		position := writePos + int64(writeBuf.Len())
 		outdata, err := proto.Marshal(item)
 		if err != nil {
 			return err
-		}
-		if meta.TLLast != 0 { // > FileDataOffset
-			// 修改 last记录的 netdata记录
-			nextRecordPosition := make([]byte, 4)
-			binary.LittleEndian.PutUint32(nextRecordPosition, uint32(position))
-			sf.file.WriteAt(nextRecordPosition, int64(meta.TLLast)+NextDataOffset)
 		}
 		meta.TLLast = uint32(position)
 		if meta.TLFirst == 0 {
 			meta.TLFirst = uint32(position)
 		}
-		binary.Write(sf.file, binary.LittleEndian, timeline) // timeline
-		position, err = sf.file.Seek(0, 2)
-		binary.Write(sf.file, binary.LittleEndian, uint32(0))            // nextdata
-		binary.Write(sf.file, binary.LittleEndian, uint32(len(outdata))) // datalen
-		sf.file.Write(outdata)
+		var nextDataAddr uint32 = 0
+		if i < lenObject-1 {
+			nextDataAddr = uint32(position) + DataHeaderLen + uint32(len(outdata))
+		}
+		binary.Write(writeBuf, binary.LittleEndian, timeline)             // timeline   8byte
+		binary.Write(writeBuf, binary.LittleEndian, nextDataAddr)         // nextdata	4byte
+		binary.Write(writeBuf, binary.LittleEndian, uint32(len(outdata))) // datalen    4byte
+		writeBuf.Write(outdata)                                           // data
 	}
+	// linked last record
+	if linkedOfLast > 0 {
+		nextRecordPosition := make([]byte, 4)
+		binary.LittleEndian.PutUint32(nextRecordPosition, uint32(writePos))
+		sf.file.WriteAt(nextRecordPosition, linkedOfLast)
+	}
+	// flush buf
+	sf.file.Seek(0, 2)
+	writeBuf.WriteTo(sf.file)
+	// update metadata
 	sf.writeMateInfo(timeline, meta)
 	return nil
 }

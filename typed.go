@@ -54,11 +54,16 @@ const (
 	NextDataOffset = int64(8)
 	// 文件第一条数据的偏移位置
 	FileDataOffset = uint32(MateTableSize + FileHeaderOffset)
+	// timeline    8 byte
+	// nextdata    4 byte
+	// datalen     4 byte
+	DataHeaderLen = 8 + 4 + 4
 )
 
 type SnapsDB interface {
 	// write one or more pieces of data to the timeline.
 	Write(timeline time.Time, data ...StoreData) error
+	WriteUnix(timeline int64, data ...StoreData) error
 	// Query a certain timeline data, and return to the slice
 	// the slice type should be inherited from protoreflect.ProtoMessage
 	/*
@@ -68,6 +73,7 @@ type SnapsDB interface {
 		db.QueryTimeline(timestamp, &list)
 	*/
 	QueryTimeline(timeline time.Time, lp_out_slice interface{}) error
+	QueryTimelineUnix(timeline int64, lp_out_slice interface{}) error
 	// query the data of a certain time interval and return the data to lp_out_map,
 	// typed protobuf.proto
 	// ErrorDBFileNotHit
@@ -86,9 +92,11 @@ type SnapsDB interface {
 		db.QueryBetween(beginTimestamp, endTimestamp, &map)
 	*/
 	QueryBetween(begin time.Time, end time.Time, lp_out_map interface{}) error
+	QueryBetweenUnix(begin int64, end int64, lp_out_map interface{}) error
 
 	/* Delete the stored file for the current day of the timeline */
 	DeleteStorageFile(timeline time.Time) error
+	DeleteStorageFileUnix(timeline int64) error
 
 	/* Get data file storage directory */
 	StorageDirectory() string
@@ -102,11 +110,11 @@ type SnapsDB interface {
 
 type StoreFile interface {
 	// 写入数据
-	Write(timestamp time.Time, data ...StoreData) error
+	Write(timestamp int64, data ...StoreData) error
 	// query a timeline for data and return to a list
-	QueryTimeline(timestamp time.Time, slice_pointer *reflect.Value, origin_slice *reflect.Value, element_type *reflect.Type) error
+	QueryTimeline(timestamp int64, slice_pointer *reflect.Value, origin_slice *reflect.Value, element_type *reflect.Type) error
 	// Query the data of a certain time interval and fill it with map[][]typed
-	QueryBetween(begin time.Time, end time.Time, map_object reflect.Value, key_type *reflect.Kind, slice_type *reflect.Type, element_type *reflect.Type) error
+	QueryBetween(begin int64, end int64, map_object reflect.Value, key_type *reflect.Kind, slice_type *reflect.Type, element_type *reflect.Type) error
 	// close file
 	Close()
 	// read file timeline meta information

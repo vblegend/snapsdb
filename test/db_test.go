@@ -67,7 +67,7 @@ func TestSnapshotDBWriteOnce(t *testing.T) {
 	v3 := &types.ProcessInfo{Pid: 3, Name: "docker-compose - 3", Cpu: 30.03, Mem: 93.45, Virt: 30000000000, Res: 330000000000000}
 	v4 := &types.ProcessInfo{Pid: 4, Name: "docker-compose - 4", Cpu: 40.04, Mem: 94.56, Virt: 40000000000, Res: 440000000000000}
 	v5 := &types.ProcessInfo{Pid: 5, Name: "docker-compose - 5", Cpu: 50.05, Mem: 95.67, Virt: 50000000000, Res: 550000000000000}
-	timestamp := time.Date(2022, 01, 01, 01, 01, 01, 01, time.Local)
+	timestamp := time.Date(2022, 9, 22, 13, 27, 43, 0, time.Local)
 	fmt.Println(timestamp.Format("2006-01-02 15:04:05"))
 	start := time.Now() // 获取当前时间
 	db.Write(timestamp, v1, v2, v3, v4, v5)
@@ -80,7 +80,7 @@ func TestSnapshotDBQuery(t *testing.T) {
 	db := InitDB()
 	timestamp := time.Date(2022, 9, 22, 13, 27, 43, 0, time.Local)
 	list := make([]types.ProcessInfo, 0)
-	list = append(list, types.ProcessInfo{Pid: 5, Name: "docker-compose - 1111", Cpu: 50.05, Mem: 95.67, Virt: 50000000000, Res: 550000000000000})
+	// list = append(list, types.ProcessInfo{Pid: 5, Name: "docker-compose - 1111", Cpu: 50.05, Mem: 95.67, Virt: 50000000000, Res: 550000000000000})
 	start := time.Now()
 	err := db.QueryTimeline(timestamp, &list)
 	cost := time.Since(start)
