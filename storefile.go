@@ -191,7 +191,9 @@ func (sf *storeFile) Write(timeline int64, data ...StoreData) error {
 	if meta.TLLast != 0 {
 		linkedOfLast = int64(meta.TLLast) + NextDataOffset
 	}
-
+	if meta.TLFirst == 0 {
+		meta.TLFirst = uint32(writePos)
+	}
 	for i, item := range data {
 		position := writePos + int64(writeBuf.Len())
 		outdata, err := proto.Marshal(item)
@@ -199,9 +201,6 @@ func (sf *storeFile) Write(timeline int64, data ...StoreData) error {
 			return err
 		}
 		meta.TLLast = uint32(position)
-		if meta.TLFirst == 0 {
-			meta.TLFirst = uint32(position)
-		}
 		var nextDataAddr uint32 = 0
 		if i < lenObject-1 {
 			nextDataAddr = uint32(position) + DataHeaderLen + uint32(len(outdata))

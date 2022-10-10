@@ -5,6 +5,17 @@ import (
 	"reflect"
 )
 
+func Indirect(v reflect.Value) reflect.Value {
+	for {
+		switch v.Kind() {
+		case reflect.Interface, reflect.Ptr:
+			v = v.Elem()
+		default:
+			return v
+		}
+	}
+}
+
 // parse map interface typed
 // returm [map_pointer,map_type,map_keytype,slice_type,element_type,error]
 func ParseMapPointer(key_map interface{}) (*reflect.Value, *reflect.Type, *reflect.Kind, *reflect.Type, *reflect.Type, error) {

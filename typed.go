@@ -20,6 +20,17 @@ type dbOptions struct {
 	timekeyformat string
 }
 
+type ValuePair map[string]interface{}
+
+type SliceData struct {
+	Tags   ValuePair
+	Values ValuePair
+}
+
+type HashMap map[string]interface{}
+
+type Binary []byte
+
 type StoreData protoreflect.ProtoMessage
 
 var ErrorDBFileNotHit = errors.New("one or more files were not hit(not found datastore file).")
