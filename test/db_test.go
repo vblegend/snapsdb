@@ -16,11 +16,11 @@ import (
 )
 
 type SimpleData struct {
-	Name   string
-	Value  float64
-	Tag    string
-	Time   time.Time
-	Arrays []string
+	Name     string
+	Value    float64
+	Tag      string
+	Time     time.Time
+	Commands []string
 }
 
 func InitDB() snapsdb.SnapsDB {
@@ -119,25 +119,24 @@ func TestSnapshotDBQueryBetween(t *testing.T) {
 // 支持 keymap 数据存储 REF https://github.com/sbunce/bson
 func TestXxx(t *testing.T) {
 	// d := SimpleData{Name: "Host", Value: 1.234, Tag: "Test", Time: time.Now(), Arrays: []string{"A", "B"}}
-	d := snapsdb.SliceData{
-		Tags: snapsdb.ValuePair{
-			"name": "top",
-			"pid":  999,
+	d := snapsdb.DataPoint{
+		Tags: snapsdb.TagPair{
+			"name":   "top",
+			"pid":    999,
+			"active": true,
+			"time":   time.Now(),
 		},
 		Values: snapsdb.ValuePair{
-			"cpu": 1.23,
-			"mem": 2.45,
+			"cpu":  1.23,
+			"mem":  2.45,
+			"json": SimpleData{Name: "top", Value: 10.01, Tag: "91.23", Time: time.Now(), Commands: []string{"a", "v", "d"}},
 		},
 	}
-
-	snapsdb.Traverse(SimpleData{Name: "top", Value: 10.01, Tag: "91.23", Time: time.Now(), Arrays: []string{"a", "v", "d"}})
-	fmt.Println("=============================================")
-	snapsdb.Traverse(d)
-
+	snapsdb.Traverse(d, "")
 	buf := bytes.NewBuffer(make([]byte, 0))
 	buf.WriteString("abcde")
 	data := buf.Bytes()
 	fmt.Println("=============================================")
-	snapsdb.Traverse(data)
+	snapsdb.Traverse(data, "")
 
 }

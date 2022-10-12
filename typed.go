@@ -20,10 +20,22 @@ type dbOptions struct {
 	timekeyformat string
 }
 
+type TagValue interface {
+	int
+	float64
+	string
+	bool
+}
+
+// value type ：string 、int、uint、float、time、bool、map、struct、slice
 type ValuePair map[string]interface{}
 
-type SliceData struct {
-	Tags   ValuePair
+// value type ：string、int、uint、time、bool
+type TagPair map[string]interface{}
+
+// snapsdb data point
+type DataPoint struct {
+	Tags   TagPair
 	Values ValuePair
 }
 
