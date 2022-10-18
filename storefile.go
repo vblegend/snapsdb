@@ -66,13 +66,16 @@ func loadStoreFile(filename string, timebaseline int64, timeKeyFormat string, au
 	if err != nil {
 		return nil, err
 	}
+	// data, err := syscall.Mmap(int(filev.file.Fd()), 0, -1, syscall.PROT_WRITE|syscall.PROT_READ, syscall.MAP_SHARED)
+	// syscall.Ftruncate
+	// fmt.Println(data, err)
 	return &filev, nil
 }
 
 func (sf *storeFile) QueryBetween(begin int64, end int64, map_object reflect.Value, key_type *reflect.Kind, slice_type *reflect.Type, element_type *reflect.Type) error {
 	sf.Lock()
 	defer sf.Unlock()
-	hitFile := end > sf.TimelineBegin && begin < sf.TimelineEnd
+	hitFile := end >= sf.TimelineBegin && begin < sf.TimelineEnd
 	if !hitFile {
 		return errors.New("beyond the scope of the query")
 	}
