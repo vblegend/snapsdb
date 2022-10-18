@@ -20,6 +20,29 @@ type dbOptions struct {
 	timekeyformat string
 }
 
+type TagValue interface {
+	int
+	float64
+	string
+	bool
+}
+
+// value type ：string 、int、uint、float、time、bool、map、struct、slice
+type ValuePair map[string]interface{}
+
+// value type ：string、int、uint、time、bool
+type TagPair map[string]interface{}
+
+// snapsdb data point
+type DataPoint struct {
+	Tags   TagPair
+	Values ValuePair
+}
+
+type HashMap map[string]interface{}
+
+type Binary []byte
+
 type StoreData protoreflect.ProtoMessage
 
 var ErrorDBFileNotHit = errors.New("one or more files were not hit(not found datastore file).")

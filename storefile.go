@@ -66,13 +66,16 @@ func loadStoreFile(filename string, timebaseline int64, timeKeyFormat string, au
 	if err != nil {
 		return nil, err
 	}
+	// data, err := syscall.Mmap(int(filev.file.Fd()), 0, -1, syscall.PROT_WRITE|syscall.PROT_READ, syscall.MAP_SHARED)
+	// syscall.Ftruncate
+	// fmt.Println(data, err)
 	return &filev, nil
 }
 
 func (sf *storeFile) QueryBetween(begin int64, end int64, map_object reflect.Value, key_type *reflect.Kind, slice_type *reflect.Type, element_type *reflect.Type) error {
 	sf.Lock()
 	defer sf.Unlock()
-	hitFile := end > sf.TimelineBegin && begin < sf.TimelineEnd
+	hitFile := end >= sf.TimelineBegin && begin < sf.TimelineEnd
 	if !hitFile {
 		return errors.New("beyond the scope of the query")
 	}
@@ -191,7 +194,9 @@ func (sf *storeFile) Write(timeline int64, data ...StoreData) error {
 	if meta.TLLast != 0 {
 		linkedOfLast = int64(meta.TLLast) + NextDataOffset
 	}
-
+	if meta.TLFirst == 0 {
+		meta.TLFirst = uint32(writePos)
+	}
 	for i, item := range data {
 		position := writePos + int64(writeBuf.Len())
 		outdata, err := proto.Marshal(item)
@@ -199,9 +204,6 @@ func (sf *storeFile) Write(timeline int64, data ...StoreData) error {
 			return err
 		}
 		meta.TLLast = uint32(position)
-		if meta.TLFirst == 0 {
-			meta.TLFirst = uint32(position)
-		}
 		var nextDataAddr uint32 = 0
 		if i < lenObject-1 {
 			nextDataAddr = uint32(position) + DataHeaderLen + uint32(len(outdata))

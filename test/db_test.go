@@ -15,6 +15,14 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+type SimpleData struct {
+	Name     string
+	Value    float64
+	Tag      string
+	Time     time.Time
+	Commands []string
+}
+
 func InitDB() snapsdb.SnapsDB {
 	snapPath := filepath.Join(util.AssemblyDir(), "../snapdata/proc")
 	db, err := snapsdb.InitDB(
@@ -110,10 +118,25 @@ func TestSnapshotDBQueryBetween(t *testing.T) {
 // Next 批量写入使用 *bytes.Buffer  一次性写入
 // 支持 keymap 数据存储 REF https://github.com/sbunce/bson
 func TestXxx(t *testing.T) {
+	// d := SimpleData{Name: "Host", Value: 1.234, Tag: "Test", Time: time.Now(), Arrays: []string{"A", "B"}}
+	d := snapsdb.DataPoint{
+		Tags: snapsdb.TagPair{
+			"name":   "top",
+			"pid":    999,
+			"active": true,
+			"time":   time.Now(),
+		},
+		Values: snapsdb.ValuePair{
+			"cpu":  1.23,
+			"mem":  2.45,
+			"json": SimpleData{Name: "top", Value: 10.01, Tag: "91.23", Time: time.Now(), Commands: []string{"a", "v", "d"}},
+		},
+	}
+	snapsdb.Traverse(d, "")
 	buf := bytes.NewBuffer(make([]byte, 0))
-
 	buf.WriteString("abcde")
 	data := buf.Bytes()
-	fmt.Println(data)
+	fmt.Println("=============================================")
+	snapsdb.Traverse(data, "")
 
 }
